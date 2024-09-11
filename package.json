@@ -1,0 +1,45 @@
+{
+  "name": "binance-historical-data",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "mocha",
+    "build": "rollup -c",
+    "prepack": "npm run build"
+  },
+  "bin": {
+    "binance-fetch": "bin/binance-fetch.js"
+  },
+  "keywords": [
+    "binance",
+    "data",
+    "trading",
+    "csv",
+    "historical"
+  ],
+  "author": "Ilia Baranov <ltftf4@gmail.com>",
+  "homepage": "https://github.com/ltftf/binance-historical-data",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ltftf/binance-historical-data.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "description": "Download historical trading data from Binance in .csv format",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "log-symbols": "^7.0.0",
+    "ora": "^8.1.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-strip": "^3.0.4",
+    "mocha": "^10.7.3",
+    "rollup": "^4.21.2"
+  },
+  "files": [
+    "bin/binance-fetch.js"
+  ]
+}
