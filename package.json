@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "mocha",
+    "test": "vitest --testTimeout 300000",
     "build": "rollup -c",
     "prepack": "npm run build"
   },
@@ -35,9 +35,9 @@
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-strip": "^3.0.4",
-    "mocha": "^10.7.3",
-    "rollup": "^4.21.2"
+    "chokidar": "^4.0.1",
+    "rollup": "^4.21.2",
+    "vitest": "^2.1.1"
   },
   "files": [
     "bin/binance-fetch.js"

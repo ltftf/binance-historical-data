@@ -1,4 +1,3 @@
-import strip from "@rollup/plugin-strip";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 
 export default {
@@ -6,8 +5,8 @@ export default {
   output: {
     file: "bin/binance-fetch.js",
     format: "es",
-    banner: "#!/usr/bin/env node"
+    banner: "#!/usr/bin/env node",
   },
-  plugins: [nodeResolve(), strip({ functions: ["console.debug"] })],
+  plugins: [nodeResolve()],
   external: [/node_modules/],
 };
