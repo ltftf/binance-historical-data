@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "vitest --testTimeout 300000",
+    "test": "vitest run --testTimeout 300000",
     "build": "rollup -c",
     "prepack": "npm run build"
   },
