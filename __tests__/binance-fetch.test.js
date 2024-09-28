@@ -12,7 +12,9 @@ const resultDir = join(import.meta.dirname, "binance-fetch-result");
 beforeAll(async () => {
   const files = await fs.readdir(resultDir);
   for (const file of files) {
-    await fs.rm(join(resultDir, file), { recursive: true, force: true });
+    if (file !== ".gitignore") {
+      await fs.rm(join(resultDir, file), { recursive: true, force: true });
+    }
   }
 });
 
