@@ -1,5 +1,4 @@
 import "./extendDate.js";
-import crypto from "crypto";
 
 export function generateDates(byDay, startDate, endDate) {
   const dates = [startDate];
@@ -13,10 +12,6 @@ export function generateDates(byDay, startDate, endDate) {
     }
   }
   return dates;
-}
-
-export function getChecksum(data) {
-  return crypto.createHash("sha256").update(data).digest("hex");
 }
 
 export function getList(arr) {

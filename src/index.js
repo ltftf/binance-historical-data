@@ -1,8 +1,9 @@
 import fs, { constants } from "fs/promises";
+import { createWriteStream } from "fs";
 import logSymbols from "log-symbols";
 import { Option, program } from "commander";
 import { join, resolve } from "path";
-import { generateDates, getChecksum, getList } from "./utils.js";
+import { generateDates, getList } from "./utils.js";
 import { byDayRegex, byMonthRegex } from "./validateDateRegex.js";
 import { IncorrectParamError } from "./customErrors.js";
 import {
@@ -15,6 +16,9 @@ import {
   spotDataTypes,
 } from "./lists.js";
 import ora from "ora";
+import https from "https";
+import crypto from "crypto";
+import { PassThrough } from "stream";
 
 program
   .option(
@@ -30,17 +34,14 @@ program
   .option(
     "-i, --intervals <intervals...>",
     "one or more intervals separated by a space. Accepted intervals: " +
-      getList(intervalList) 
+      getList(intervalList)
   )
   .option(
     "-o, --output-path <path>",
     "path to save the data to. Current directory is used by default"
   )
   .addOption(
-    new Option(
-      "-P, --parallel <num>",
-      "number of files to download at a time"
-    )
+    new Option("-P, --parallel <num>", "number of files to download at a time")
       .argParser((val) => {
         const parsed = parseInt(val);
         if (!Number.isInteger(parsed) || parsed < 1) {
@@ -223,7 +224,6 @@ try {
       throw e;
     }
   }
-  console.debug(params);
 
   /**
    * compose links for fetching data
@@ -266,15 +266,21 @@ try {
   const progressCount = {
     success: 0,
     noData: 0,
-    checksumFail: 0,
-    fetchFail: 0,
+    fail: 0,
     done: function () {
-      return this.success + this.noData + this.checksumFail + this.fetchFail;
+      return this.success + this.noData + this.fail;
     },
   };
   const spinner = ora();
   function printResult(symbol, name, error) {
     spinner.stop();
+    if (symbol === logSymbols.success) {
+      progressCount.success++;
+    } else if (symbol === logSymbols.warning) {
+      progressCount.noData++;
+    } else {
+      progressCount.fail++;
+    }
     const doneCount = progressCount.done();
     console.log(
       `[${doneCount
@@ -297,15 +303,12 @@ try {
     if (!waitingToFinish) {
       waitingToFinish = true;
       Promise.all(promises).then(() => {
-        let result = `\nDownloaded: ${progressCount.success}/${requestCount} files`;
+        let result = `Downloaded: ${progressCount.success}/${requestCount} files`;
         if (progressCount.noData) {
           result += `; not found: ${progressCount.noData}/${requestCount} files`;
         }
-        if (progressCount.checksumFail) {
-          result += `; checksum fail: ${progressCount.checksumFail}/${requestCount} files`;
-        }
-        if (progressCount.fetchFail) {
-          result += `; failed to fetch: ${progressCount.fetchFail}/${requestCount} files`;
+        if (progressCount.fail) {
+          result += `; failed to complete: ${progressCount.fail}/${requestCount} files`;
         }
         console.log(result);
         if (progressCount.success === 0) {
@@ -318,59 +321,113 @@ try {
   /**
    * fetch data from each link
    */
-  async function requestData(url) {
-    let fileName = url.match(/[^/]*\.zip$/)[0];
-    let zip, checksumText;
-    try {
-      [zip, checksumText] = await Promise.all([
-        new Promise((res, rej) => {
-          fetch(url)
-            .then((res) => res.arrayBuffer())
-            .then((arrBuff) => res(Buffer.from(arrBuff)))
-            .catch(rej);
-        }),
-        new Promise((res, rej) => {
-          fetch(url + ".CHECKSUM")
-            .then((res) => res.text())
-            .then((sum) => res(sum))
-            .catch(rej);
-        }),
-      ]);
-    } catch (e) {
-      progressCount.fetchFail++;
-      console.debug(url);
-      if (e instanceof TypeError) {
-        printResult(logSymbols.error, fileName, "network error");
-      } else {
-        printResult(logSymbols.error, fileName, "error fetching data");
-      }
-    }
+  function requestData(url) {
+    const fileName = url.match(/[^/]*\.zip$/)[0];
+    const fileVerified = join(outputPath, fileName);
+    const fileUnverified = fileVerified.replace(/\.zip$/, "_UNVERIFIED.zip");
 
-    if (zip && checksumText) {
-      console.debug(url);
-      const checksum = checksumText.slice(0, 64);
-      if (!/^[0-9a-f]{64}$/.test(checksum)) {
-        progressCount.noData++;
-        printResult(logSymbols.warning, fileName, "no data");
-      } else if (checksum !== getChecksum(zip)) {
-        progressCount.checksumFail++;
-        printResult(logSymbols.error, fileName, "checksum does not match");
-      } else {
+    const sha256 = crypto.createHash("sha256");
+
+    function getChecksum() {
+      return new Promise((resolve, reject) => {
         try {
-          await fs.writeFile(join(outputPath, fileName), zip);
-          progressCount.success++;
-          printResult(logSymbols.success, fileName);
+          https
+            .get(url + ".CHECKSUM", (res) => {
+              let checksumText = "";
+              res.on("error", reject);
+              res.on("end", () => {
+                const checksum = checksumText.slice(0, 64);
+                if (/^[0-9a-f]{64}$/.test(checksum)) {
+                  resolve(checksum);
+                } else {
+                  reject();
+                }
+              });
+              res.on("data", (chunk) => {
+                checksumText += chunk.toString();
+              });
+            })
+            .on("error", reject);
         } catch (e) {
-          progressCount.success++;
-          printResult(logSymbols.error, fileName, "error saving on disk");
-          throw e;
+          reject(e);
         }
-      }
+      });
     }
 
+    return new Promise((resolve) => {
+      try {
+        https
+          .get(url, (res) => {
+            if (res.headers["content-type"].includes("xml")) {
+              res.destroy();
+              printResult(logSymbols.warning, fileName, "no data");
+              return resolve();
+            }
+
+            res.on("error", (e) => {
+              printResult(
+                logSymbols.error,
+                fileName,
+                getErrorString("error while loading data", e)
+              );
+              resolve();
+            });
+
+            res.on("end", async () => {
+              try {
+                const checksum = await getChecksum();
+                if (checksum === sha256.digest("hex")) {
+                  await fs.rename(fileUnverified, fileVerified);
+                  printResult(logSymbols.success, fileName);
+                  resolve();
+                } else {
+                  printResult(
+                    logSymbols.error,
+                    fileName,
+                    "checksum does not match"
+                  );
+                  resolve();
+                }
+              } catch (e) {
+                printResult(
+                  logSymbols.error,
+                  fileName,
+                  getErrorString("error fetching checksum", e)
+                );
+                resolve();
+              }
+            });
+
+            res
+              .pipe(
+                new PassThrough().on("data", (chunk) => sha256.update(chunk))
+              )
+              .pipe(createWriteStream(fileUnverified));
+          })
+          .on("error", errorConnecting);
+      } catch (e) {
+        errorConnecting(e);
+      }
+      function errorConnecting(e) {
+        printResult(
+          logSymbols.error,
+          fileName,
+          getErrorString("error establishing connection", e)
+        );
+        resolve();
+      }
+      function getErrorString(text, e) {
+        return text + (e.message ? ` [${e.message}]` : "");
+      }
+    });
+  }
+
+  async function addToQueue() {
+    const promise = requestData(urls.shift());
+    promises.push(promise);
+    await promise;
     if (urls.length) {
-      const promise = requestData(urls.shift());
-      promises.push(promise);
+      addToQueue();
     } else {
       waitToFinish();
     }
@@ -398,15 +455,16 @@ try {
   );
   spinner.start();
   for (let _ = 0; _ < params.parallel && urls.length; _++) {
-    const promise = requestData(urls.shift());
-    promises.push(promise);
+    addToQueue();
   }
 } catch (e) {
   if (e.name && e.name === "IncorrectParamError") {
     console.log("Error: " + e.message);
     process.exitCode = 2;
   } else {
-    console.log(e);
+    console.log(
+      e.message || e.stack || "An unexpected error occurred. Exiting.."
+    );
     process.exitCode = 255;
   }
 }
