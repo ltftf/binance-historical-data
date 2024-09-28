@@ -54,9 +54,59 @@ binance-fetch -d 2021-01 2023-12 -p spot -t klines -s btcusdt ethusdt -i 1s 1m 3
 
 This command downloads `monthly` data for two `symbols` and all `intervals` from `2021-01` to `2023-12` (3 years), which will result in 1152 downloaded files.
 
+#### Possible values
+
+##### product
+
+- spot
+- usd-m
+- coin-m
+- option
+
+##### data-type (spot)
+
+- klines
+- aggTrades
+- trades
+
+##### data-type (usd-m/coin-m monthly)
+
+- aggTrades
+- bookTicker
+- fundingRate
+- indexPriceKlines
+- klines
+- markPriceKlines
+- premiumIndexKlines
+- trades
+
+##### data-type (usd-m/coin-m daily)
+
+- aggTrades
+- bookDepth
+- bookTicker
+- indexPriceKlines
+- klines
+- liquidationSnapshot
+- markPriceKlines
+- metrics
+- premiumIndexKlines
+- trades
+
+##### data-type (option)
+
+- BVOLIndex
+- EOHSummary
+
+##### interval
+
+For all the intervals see example above.
+
 ### Output directory
 
 By default the data is saved in the current directory. Pass `-o` or `--output` followed by a relative or absolute path to change that.
+
+Data is loaded with a stream. Until the file is fully downloaded and verified, it will look like this: `<symbol>...UNVERIFIED.zip`.
 
 ### Concurrency
 
