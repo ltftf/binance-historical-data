@@ -1,12 +1,24 @@
 export const products = ["spot", "usd-m", "coin-m", "option"];
 export const spotDataTypes = ["klines", "aggTrades", "trades"];
-export const futuresDailyDataTypes = [
+export const coinMDailyDataTypes = [
   "aggTrades",
   "bookDepth",
   "bookTicker",
   "indexPriceKlines",
   "klines",
   "liquidationSnapshot",
+  "markPriceKlines",
+  "metrics",
+  "premiumIndexKlines",
+  "trades",
+];
+export const usdMDailyDataTypes = [
+  "aggTrades",
+  "bookDepth",
+  "bookTicker",
+  "indexPriceKlines",
+  "klines",
+  // "liquidationSnapshot", // removed from the API
   "markPriceKlines",
   "metrics",
   "premiumIndexKlines",

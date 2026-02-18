@@ -80,7 +80,7 @@ This command downloads `monthly` data for two `symbols` and all `intervals` from
 - premiumIndexKlines
 - trades
 
-##### `--data-type (-t)` (usd-m/coin-m daily)
+##### `--data-type (-t)` (coin-m daily)
 
 - aggTrades
 - bookDepth
@@ -88,6 +88,18 @@ This command downloads `monthly` data for two `symbols` and all `intervals` from
 - indexPriceKlines
 - klines
 - liquidationSnapshot
+- markPriceKlines
+- metrics
+- premiumIndexKlines
+- trades
+
+##### `--data-type (-t)` (usd-m daily)
+
+- aggTrades
+- bookDepth
+- bookTicker
+- indexPriceKlines
+- klines
 - markPriceKlines
 - metrics
 - premiumIndexKlines

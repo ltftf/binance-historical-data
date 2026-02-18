@@ -8,7 +8,8 @@ import { byDayRegex, byMonthRegex } from "./validateDateRegex.js";
 import { IncorrectParamError } from "./customErrors.js";
 import {
   datatypesWithInterval,
-  futuresDailyDataTypes,
+  coinMDailyDataTypes,
+  usdMDailyDataTypes,
   futuresMonthlyDataTypes,
   intervalList,
   optionsDataTypes,
@@ -34,7 +35,7 @@ program
   .option(
     "-i, --intervals <intervals...>",
     "one or more intervals separated by a space. Accepted intervals: " +
-      getList(intervalList)
+    getList(intervalList)
   )
   .option(
     "-o, --output-path <path>",
@@ -79,8 +80,8 @@ try {
   } else if (!byMonthRegex.test(startDate)) {
     throw new IncorrectParamError(
       "incorrect start date: '" +
-        startDate +
-        "'. Accepted formats: monthly (YYYY-MM), daily (YYYY-MM-DD)"
+      startDate +
+      "'. Accepted formats: monthly (YYYY-MM), daily (YYYY-MM-DD)"
     );
   }
   if (
@@ -89,8 +90,8 @@ try {
   ) {
     throw new IncorrectParamError(
       "incorrect end date: '" +
-        endDate +
-        "'. Both start and end date should either be in monthly (YYYY-MM) or daily (YYYY-MM-DD) format"
+      endDate +
+      "'. Both start and end date should either be in monthly (YYYY-MM) or daily (YYYY-MM-DD) format"
     );
   }
   if (endDate && +new Date(startDate) >= +new Date(endDate)) {
@@ -114,14 +115,14 @@ try {
       if (!spotDataTypes.includes(params.dataType)) {
         throw new IncorrectParamError(
           "--data-type (-t) for 'spot' should be one of: " +
-            getList(spotDataTypes)
+          getList(spotDataTypes)
         );
       }
     } else if (params.product === "option") {
       if (!optionsDataTypes.includes(params.dataType)) {
         throw new IncorrectParamError(
           "--data-type (-t) for 'option' should be one of: " +
-            getList(optionsDataTypes)
+          getList(optionsDataTypes)
         );
       }
       if (!byDay) {
@@ -130,16 +131,27 @@ try {
         );
       }
     } else {
-      if (byDay && !futuresDailyDataTypes.includes(params.dataType)) {
-        throw new IncorrectParamError(
-          "--data-type (-t) for daily futures data ('usd-m' or 'coin-m') should be one of: " +
-            getList(futuresDailyDataTypes)
-        );
+      if (byDay) {
+        if (params.product === "coin-m") {
+          if (!coinMDailyDataTypes.includes(params.dataType)) {
+            throw new IncorrectParamError(
+              "--data-type (-t) for daily futures data (coin-m) should be one of: " +
+              getList(coinMDailyDataTypes)
+            );
+          }
+        } else {
+          if (!usdMDailyDataTypes.includes(params.dataType)) {
+            throw new IncorrectParamError(
+              "--data-type (-t) for daily futures data (usd-m) should be one of: " +
+              getList(usdMDailyDataTypes)
+            );
+          }
+        }
       }
       if (!byDay && !futuresMonthlyDataTypes.includes(params.dataType)) {
         throw new IncorrectParamError(
           "--data-type (-t) for monthly futures data ('usd-m' or 'coin-m') should be one of: " +
-            getList(futuresMonthlyDataTypes)
+          getList(futuresMonthlyDataTypes)
         );
       }
     }
@@ -182,9 +194,9 @@ try {
       if (incorrectIntervals.length) {
         throw new IncorrectParamError(
           "incorrect intervals provided: " +
-            getList(incorrectIntervals) +
-            ". Accepted intervals: " +
-            getList(intervalList)
+          getList(incorrectIntervals) +
+          ". Accepted intervals: " +
+          getList(intervalList)
         );
       }
     } else {
@@ -241,8 +253,8 @@ try {
           params.product === "usd-m"
             ? "futures/um"
             : params.product === "coin-m"
-            ? "futures/cm"
-            : params.product
+              ? "futures/cm"
+              : params.product
         );
         addToPath(byDay ? "daily" : "monthly");
         addToPath(params.dataType);
@@ -285,9 +297,8 @@ try {
     console.log(
       `[${doneCount
         .toString()
-        .padStart(requestCountWidth, " ")}/${requestCount}] ${name} ${symbol}${
-        error ? " (" + error + ")" : ""
-      }`
+        .padStart(requestCountWidth, " ")
+      }/${requestCount}] ${name} ${symbol}${error ? " (" + error + ")" : ""}`
     );
     if (doneCount < requestCount) {
       spinner.start();
@@ -303,7 +314,7 @@ try {
     if (!waitingToFinish) {
       waitingToFinish = true;
       Promise.all(promises).then(() => {
-        if (progressCount.success === requestCount){
+        if (progressCount.success === requestCount) {
           console.log("DONE");
         } else {
           let result = `Downloaded: ${progressCount.success}/${requestCount} files`;
@@ -442,20 +453,20 @@ try {
    */
   console.log(
     "Saving to '" +
-      outputPath +
-      "'" +
-      "\nDownloading '" +
-      params.dataType +
-      "' " +
-      (byDay ? "daily" : "monthly") +
-      " data for " +
-      params.symbols.length +
-      " symbol(s)" +
-      (params.intervals
-        ? " and " + params.intervals.length + " interval(s)"
-        : "") +
-      "\nTotal number of files to load: " +
-      requestCount
+    outputPath +
+    "'" +
+    "\nDownloading '" +
+    params.dataType +
+    "' " +
+    (byDay ? "daily" : "monthly") +
+    " data for " +
+    params.symbols.length +
+    " symbol(s)" +
+    (params.intervals
+      ? " and " + params.intervals.length + " interval(s)"
+      : "") +
+    "\nTotal number of files to load: " +
+    requestCount
   );
   spinner.start();
   for (let _ = 0; _ < params.parallel && urls.length; _++) {
@@ -465,7 +476,7 @@ try {
   process.exitCode = 1;
   if (!e) {
     console.log("An unexpected error occurred. Exiting...")
-  } else if (e instanceof Error){
+  } else if (e instanceof Error) {
     if (e.name === "IncorrectParamError") {
       console.log("Error: " + e.message);
       process.exitCode = 2;

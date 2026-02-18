@@ -177,12 +177,13 @@ export const Tests = [
     symbol: "BTCUSDT",
     interval: "1h",
   },
-  {
-    product: "usd-m",
-    dataType: "liquidationSnapshot",
-    date: "2024-01-01",
-    symbol: "BTCUSDT",
-  },
+  // removed from the API
+  // {
+  //   product: "usd-m",
+  //   dataType: "liquidationSnapshot",
+  //   date: "2024-01-01",
+  //   symbol: "BTCUSDT",
+  // },
   {
     product: "usd-m",
     dataType: "markPriceKlines",
