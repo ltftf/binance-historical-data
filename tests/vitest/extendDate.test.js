@@ -1,4 +1,4 @@
-import "../src/extendDate.js";
+import "../../src/extendDate.js";
 import { describe, it, expect } from "vitest";
 
 describe("Test added Date methods", function () {

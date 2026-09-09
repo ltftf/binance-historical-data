@@ -1,4 +1,4 @@
-import { byDayRegex, byMonthRegex } from "../src/validateDateRegex";
+import { byDayRegex, byMonthRegex } from "../../src/validateDateRegex";
 import { describe, it, expect } from "vitest";
 
 describe("Test binance date string validation", function () {

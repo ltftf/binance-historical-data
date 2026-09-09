@@ -1,9 +1,9 @@
 import fs, { constants } from "fs/promises";
-import { createWriteStream } from "fs";
+import { createWriteStream, existsSync } from "fs";
 import logSymbols from "log-symbols";
 import { Option, program } from "commander";
 import { join, resolve } from "path";
-import { generateDates, getList } from "./utils.js";
+import { generateDates, getList, sortZips } from "./utils.js";
 import { byDayRegex, byMonthRegex } from "./validateDateRegex.js";
 import { IncorrectParamError } from "./customErrors.js";
 import {
@@ -19,7 +19,11 @@ import {
 import ora from "ora";
 import https from "https";
 import crypto from "crypto";
-import { PassThrough } from "stream";
+import ospath from "ospath";
+import { Open } from "unzipper";
+import { Transform } from "stream";
+
+const UNVERIFIED_SUFFIX = "UNVERIFIED";
 
 program
   .option(
@@ -37,6 +41,8 @@ program
     "one or more intervals separated by a space. Accepted intervals: " +
     getList(intervalList)
   )
+  .option("-H, --no-header", "do not add header to the merged files")
+  .option("-M, --no-merge", "do not unzip and merge")
   .option(
     "-o, --output-path <path>",
     "path to save the data to. Current directory is used by default"
@@ -207,6 +213,18 @@ try {
   /**
    * output path validation
    */
+  const tmpPath = join(ospath.tmp(), "node-binance-historical-data");
+  if (params.merge) {
+    try {
+      await fs.rm(tmpPath, { recursive: true, force: true });
+      await fs.mkdir(tmpPath);
+    } catch (e) {
+      throw new Error(
+        `could not create directory for temporary ZIP storage at '${tmpPath}': ` +
+        e.message
+      );
+    }
+  }
   const outputPath = resolve(params.outputPath ?? ".");
   try {
     await fs.access(outputPath, constants.W_OK);
@@ -313,10 +331,11 @@ try {
   function waitToFinish() {
     if (!waitingToFinish) {
       waitingToFinish = true;
-      Promise.all(promises).then(() => {
-        if (progressCount.success === requestCount) {
-          console.log("DONE");
-        } else {
+      Promise.all(promises).then(async () => {
+        if (progressCount.success === 0) {
+          process.exitCode = 1;
+        }
+        if (progressCount.success !== requestCount) {
           let result = `Downloaded: ${progressCount.success}/${requestCount} files`;
           if (progressCount.noData) {
             result += `; not found: ${progressCount.noData}/${requestCount} files`;
@@ -325,9 +344,102 @@ try {
             result += `; failed to complete: ${progressCount.fail}/${requestCount} files`;
           }
           console.log(result);
-          if (progressCount.success === 0) {
-            process.exitCode = 1;
+        } else if (!params.merge) {
+          console.log("DONE");
+        }
+        if (params.merge && progressCount.success > 0) {
+          console.log("Processing archives...");
+          const files = await fs.readdir(tmpPath);
+          for (const symbol of params.symbols) {
+            for (const interval of params.intervals ?? [null]) {
+              const zips = files.filter(file => {
+                const correctGroup = file.startsWith(`${symbol}-${interval ?? params.dataType}`);
+                const finished = !file.includes(UNVERIFIED_SUFFIX);
+                return correctGroup && finished;
+              }
+              );
+              sortZips(zips);
+
+              let outputFileName =
+                `${symbol}-${params.product.replace("-", "")}-${params.dataType}`;
+              if (interval) {
+                outputFileName += `-${interval}`;
+              }
+              function getDateFromZip(name) {
+                const [, , ...date] = name.replace(".zip", "").split("-");
+                return date.join("-");
+              }
+              outputFileName += `-${getDateFromZip(zips[0])}`;
+              if (zips.length > 1) {
+                outputFileName += `--${getDateFromZip(zips[zips.length - 1])}`;
+              }
+              outputFileName += ".csv";
+
+              function getCsvFromZip(file) {
+                return new Promise((resolve, reject) => {
+                  Open.file(file).then(zip => {
+                    const csv = zip.files.find(f => f.path.endsWith('.csv'));
+                    resolve(csv);
+                  }).catch(reject);
+                })
+              }
+              function appendFinalCsv(csv, filePath) {
+                return new Promise((resolve, reject) => {
+                  let firstChunk = true;
+                  const stripHeader = new Transform({
+                    transform(chunk, encoding, cb) {
+                      chunk = chunk.toString();
+                      if (firstChunk) {
+                        chunk = chunk.replace(/^[^0-9].*\n/, "");
+                        firstChunk = false;
+                      }
+                      this.push(chunk, "ascii");
+                      cb();
+                    }
+                  });
+                  const writeStream = createWriteStream(filePath, { flags: "a" });
+                  csv
+                    .stream()
+                    .pipe(stripHeader)
+                    .pipe(writeStream)
+                    .on("error", reject)
+                    .on("close", resolve);
+                })
+              }
+
+              let fileIndex = 0;
+              const outputFilePath = () => join(outputPath, outputFileName);
+              while (existsSync(outputFilePath())) {
+                outputFileName = outputFileName.replace(/(?:_\d+)?.csv$/, `_${++fileIndex}.csv`);
+              }
+              if (params.header) {
+                const header = JSON.parse(await fs.readFile(
+                  join(import.meta.dirname, "..", "headers.json"),
+                  { encoding: "ascii" }
+                ))[`${params.product}_${params.dataType}`];
+                try {
+                  await fs.writeFile(outputFilePath(), header + "\n", "ascii");
+                } catch (e) {
+                  console.log(`${outputFileName} ${logSymbols.error} (could not add header: ${e.message})`);
+                  continue;
+                }
+              }
+              for (const zip of zips) {
+                try {
+                  const csv = await getCsvFromZip(join(tmpPath, zip));
+                  await appendFinalCsv(csv, outputFilePath());
+                } catch (e) {
+                  throw new Error(
+                    (e?.message ?? e ?? "An unknown error occurred") +
+                    "\nError while unzipping and merging. If this " +
+                    "persists, pass --no-merge"
+                  );
+                }
+              }
+              console.log(`${outputFileName} ${logSymbols.success}`);
+            }
           }
+          console.log("DONE");
         }
       });
     }
@@ -338,8 +450,8 @@ try {
    */
   function requestData(url) {
     const fileName = url.match(/[^/]*\.zip$/)[0];
-    const fileVerified = join(outputPath, fileName);
-    const fileUnverified = fileVerified.replace(/\.zip$/, "_UNVERIFIED.zip");
+    const fileVerified = join(params.merge ? tmpPath : outputPath, fileName);
+    const fileUnverified = fileVerified.replace(/\.zip$/, `_${UNVERIFIED_SUFFIX}.zip`);
 
     const sha256 = crypto.createHash("sha256");
 
@@ -414,9 +526,7 @@ try {
             });
 
             res
-              .pipe(
-                new PassThrough().on("data", (chunk) => sha256.update(chunk))
-              )
+              .on("data", (chunk) => sha256.update(chunk))
               .pipe(createWriteStream(fileUnverified));
           })
           .on("error", errorConnecting);
@@ -451,23 +561,23 @@ try {
   /**
    * program start
    */
-  console.log(
-    "Saving to '" +
-    outputPath +
-    "'" +
-    "\nDownloading '" +
-    params.dataType +
-    "' " +
-    (byDay ? "daily" : "monthly") +
-    " data for " +
-    params.symbols.length +
-    " symbol(s)" +
-    (params.intervals
-      ? " and " + params.intervals.length + " interval(s)"
-      : "") +
-    "\nTotal number of files to load: " +
-    requestCount
-  );
+  const expectingAfterMerge = params.symbols.length * (params.intervals?.length || 1);
+  let infoMessage =
+    `Downloading '${params.dataType}' ${byDay ? "daily" : "monthly"} ` +
+    `data for ${params.symbols.length} symbol(s)`;
+  if (params.intervals) {
+    infoMessage += ` and ${params.intervals.length} interval(s)`;
+  }
+  infoMessage += `\nSaving to '${outputPath}'`;
+  if (params.merge) {
+    infoMessage += `\nTemporary archive storage: '${tmpPath}'`;
+  }
+  infoMessage += `\nTotal number of archives to load: ${requestCount}`;
+  if (params.merge && requestCount !== expectingAfterMerge) {
+    infoMessage += `\nExpecting files after merging: ${expectingAfterMerge}`;
+  }
+  console.log(infoMessage);
+
   spinner.start();
   for (let _ = 0; _ < params.parallel && urls.length; _++) {
     addToQueue();
@@ -481,7 +591,7 @@ try {
       console.log("Error: " + e.message);
       process.exitCode = 2;
     } else {
-      console.log(e.stack);
+      console.log(e.stack ?? e.message);
     }
   } else {
     console.log(e);

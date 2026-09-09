@@ -17,3 +17,20 @@ export function generateDates(byDay, startDate, endDate) {
 export function getList(arr) {
   return arr.map((e) => `'${e}'`).join(", ");
 }
+
+export function sortZips(zips) {
+  zips.sort((a, b) => {
+    const dates = [];
+    for (const fileName of [a, b]) {
+      const [, , ...date] = fileName.replace(".zip", "").split("-");
+      dates.push(date.map(d => parseInt(d)));
+    }
+    for (let i = 0; i < dates[0].length; i++) {
+      const dateA = dates[0][i];
+      const dateB = dates[1][i];
+      if (dateA !== dateB) {
+        return dateA - dateB;
+      }
+    }
+  });
+}

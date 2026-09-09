@@ -1,12 +1,10 @@
 # Binance Historical Data Collector
 
-A CLI utility to easily download large amounts of historical trading data from [Binance](https://www.binance.com/en). Each file is verified with the checksum.
+A CLI utility to easily download and aggregate large amounts of historical trading data from Binance. Each file is verified with the checksum. Files are unzipped and merged automatically.
 
 ## Why
 
-Binance offers two methods to access the historical data: through [their API](https://binance-docs.github.io/apidocs) in `JSON` format or [this webpage](https://www.binance.com/en/landing/data) in `CSV` format. It's impossible to *quickly* get historical data for data types such as `trades` and `aggTrades` with the first method, and it would still require some manual labor to fetch a lot of files with the second method. 
-
-This library allows to collect data in `CSV` format for any date range, any number of symbols and intervals (if present) with a single command.
+Binance offers two methods to access the historical data: through the [API](https://developers.binance.com/en/docs/catalog) in `JSON` format or from the [Market Data](https://data.binance.vision/) page in `CSV` format. The API can't be used to *quickly* get any considerable amount of data, especially for data types such as `trades` and `aggTrades`. This library makes it easy to quickly download data in `CSV` format for a custom date range, multiple symbols and intervals with a single command.
 
 ## Installation
 
@@ -52,7 +50,7 @@ To get data for a range of `dates`, provide two `date` strings separated by a sp
 binance-fetch -d 2021-01 2023-12 -p spot -t klines -s btcusdt ethusdt -i 1s 1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d 3d 1w 1mo
 ```
 
-This command downloads `monthly` data for two `symbols` and all `intervals` from `2021-01` to `2023-12` (3 years), which will result in 1152 downloaded files.
+This command downloads `monthly` data for two `symbols` and all `intervals` from `2021-01` to `2023-12` (3 years), which will result in 1152 downloaded ZIP archives.
 
 #### Possible values
 
@@ -114,15 +112,36 @@ This command downloads `monthly` data for two `symbols` and all `intervals` from
 
 1s 1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d 3d 1w 1mo.
 
+### Header
+
+All the files after merging will have a header. Pass `--no-header (-H)` to only have the data.
+
+### Merge
+
+By default the archives will be unzipped, grouped by the symbol and interval and merged in the corresponding CSV files. 
+
+Suppose you need to get data for two symbols and two intervals:
+
+```shell
+binance-fetch -d 2023-01 2025-12 -p usd-m -t klines -s btcusdt ethusdt -i 4h 1d
+```
+
+This will result in 4 CSV files:
+
+- BTCUSDT-usdm-klines-4h-2023-01--2025-12.csv
+- BTCUSDT-usdm-klines-1d-2023-01--2025-12.csv
+- ETHUSDT-usdm-klines-4h-2023-01--2025-12.csv
+- ETHUSDT-usdm-klines-1d-2023-01--2025-12.csv
+
+Pass `--no-merge (-M)` to get the original ZIP files instead.
+
 ### Output directory
 
-By default the data is saved in the current directory. Pass `-o` or `--output` followed by a relative or absolute path to change that.
-
-Data is loaded with a stream. Until the file is fully downloaded and verified, it will look like this: `<symbol>...UNVERIFIED.zip`.
+By default the data is saved in the current directory. Pass `--output (-o)` followed by a relative or absolute path to change that.
 
 ### Concurrency
 
-By default 5 files are downloaded at a time. Use `-P` to change the number (pass `-P 1` to download each file sequentially).
+By default 5 files are downloaded at a time. Use `--parallel (-P)` to change the number (pass `-P 1` to download each file sequentially).
 
 ## Debug
 

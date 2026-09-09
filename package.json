@@ -1,9 +1,12 @@
 {
   "name": "binance-historical-data",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
-    "test": "vitest run --testTimeout 300000 --reporter=verbose",
+    "test": "vitest run",
+    "test-endpoints": "node tests/endpoints/index.js",
+    "test-aggregation": "node tests/aggregation/index.js",
+    "test-headers": "node tests/headers/index.js",
     "build": "rollup -c",
     "prepack": "npm run build"
   },
@@ -31,7 +34,9 @@
   "dependencies": {
     "commander": "^12.1.0",
     "log-symbols": "^7.0.0",
-    "ora": "^8.1.0"
+    "ora": "^8.1.0",
+    "ospath": "^1.2.2",
+    "unzipper": "^0.12.5"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.2.3",

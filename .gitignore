@@ -1,4 +1,4 @@
-/node_modules/
-/bin/
-/__tests__/binance-fetch-result/*
-!/__tests__/binance-fetch-result/.gitignore
+node_modules/
+bin/
+tests/endpoints/result/
+tests/aggregation/result/
